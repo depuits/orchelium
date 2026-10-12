@@ -104,11 +104,17 @@ function decrypt(text) {
 
 function padStringTo256Bits(inputString) {
     const blockSize = 32; // 256 bits / 8 bits per byte = 32 bytes
-    const inputLength = Buffer.from(inputString, 'utf8').length;
-    const paddingLength = blockSize - (inputLength % blockSize);
-    const padding = Buffer.alloc(paddingLength, paddingLength); // Create a buffer filled with the padding length
-    const paddedBuffer = Buffer.concat([Buffer.from(inputString, 'utf8'), padding]);
-    return paddedBuffer.toString('utf8');
+    const buf = Buffer.from(inputString, 'utf8');
+
+    // 32 bytes or longer: derive a stable 32-byte key via SHA-256.
+    if (buf.length >= blockSize) {
+        return crypto.createHash('sha256').update(buf).digest();
+    }
+
+    // Shorter than 32 bytes: pad to 32 bytes.
+    const paddingLength = blockSize - buf.length;
+    const padding = Buffer.alloc(paddingLength, paddingLength);
+    return Buffer.concat([buf, padding]);
 }
 
 //new key derivation function using PBKDF2
