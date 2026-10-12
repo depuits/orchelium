@@ -405,12 +405,12 @@ function scriptSelected(element,inScript,inDescription){
 
       <!-- Load the Monaco Editor styles -->
       <!--<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.23.0/min/vs/editor/editor.main.css" />-->
-      <link rel="stylesheet" data-name="vs/editor/editor.main" href="/monaco-editor/min/vs/editor/editor.main.css" />
+      <link rel="stylesheet" data-name="vs/editor/editor.main" href="/monaco-editor/min/vs/style.css?v=0.53.0" />
 
       <!-- Load the Monaco Editor's JavaScript files -->
-      <script src="/monaco-editor/min/vs/loader.js"></script>
+      <script src="/monaco-editor/min/vs/loader.js?v=0.53.0"></script>
       <script>
-          require.config({ paths: { 'vs': '/monaco-editor/min/vs' } });
+          require.config({ paths: { 'vs': '/monaco-editor/min/vs' }, urlArgs: 'v=0.53.0' });
   
           // Load the Monaco Editor
           require(['vs/editor/editor.main'], function() {
