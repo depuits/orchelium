@@ -2368,6 +2368,7 @@ When unchecked (default), execution continues through the graph to a Success or 
       if (resolvedType === 'start') {
         label = 'Start';
         icon = 'play_arrow';
+        data = { terminateOnError: true };
         ports = [{ id: 'out', label: 'next', x: CANVAS.nodeWidth / 2, y: CANVAS.nodeHeight }];
       } else if (resolvedType === 'execute') {
         const isHttpNode = type === 'execute-http';
