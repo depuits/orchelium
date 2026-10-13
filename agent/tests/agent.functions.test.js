@@ -8,6 +8,7 @@ jest.mock('os');
 
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 
 // ─── getReturnCodeFromExit ────────────────────────────────────────────────────
 
@@ -61,52 +62,63 @@ describe('getReturnCodeFromExit', () => {
 describe('padStringTo256Bits', () => {
   function padStringTo256Bits(inputString) {
     const blockSize = 32;
-    const inputLength = Buffer.from(inputString, 'utf8').length;
-    const paddingLength = blockSize - (inputLength % blockSize);
-    return Buffer.concat([
-      Buffer.from(inputString, 'utf8'),
-      Buffer.alloc(paddingLength, paddingLength),
-    ]).toString('utf8');
+    const buf = Buffer.from(inputString, 'utf8');
+
+    if (buf.length >= blockSize) {
+      return crypto.createHash('sha256').update(buf).digest();
+    }
+
+    const paddingLength = blockSize - buf.length;
+    const padding = Buffer.alloc(paddingLength, paddingLength);
+    return Buffer.concat([buf, padding]);
   }
 
-  it('should produce output whose byte length is a multiple of 32', () => {
+  it('should produce a 32-byte output for short strings', () => {
     const result = padStringTo256Bits('hello');
-    expect(Buffer.from(result, 'utf8').length % 32).toBe(0);
+    expect(result).toHaveLength(32);
   });
 
   it('should pad a short string to exactly 32 bytes', () => {
     const result = padStringTo256Bits('test');
-    expect(Buffer.from(result, 'utf8').length).toBe(32);
+    expect(result).toHaveLength(32);
   });
 
-  it('should pad a 32-byte input to 64 bytes (full extra block)', () => {
-    // When input is exactly one block, a full padding block is appended
+  it('should hash a 32-byte input to a 32-byte digest', () => {
     const input = 'a'.repeat(32);
     const result = padStringTo256Bits(input);
-    expect(Buffer.from(result, 'utf8').length).toBe(64);
+    expect(result).toEqual(crypto.createHash('sha256').update(input, 'utf8').digest());
+    expect(result).toHaveLength(32);
+  });
+
+  it('should hash inputs longer than 32 UTF-8 bytes consistently', () => {
+    const input = 'é'.repeat(17);
+    const inputBuffer = Buffer.from(input, 'utf8');
+    expect(inputBuffer.length).toBeGreaterThan(32);
+
+    const result = padStringTo256Bits(input);
+    expect(result).toEqual(crypto.createHash('sha256').update(inputBuffer).digest());
+    expect(result).toHaveLength(32);
   });
 
   it('should preserve the original string at the start of the output', () => {
     const input = 'CHANGEIT';
     const result = padStringTo256Bits(input);
-    expect(result.startsWith(input)).toBe(true);
+    expect(result.subarray(0, Buffer.byteLength(input, 'utf8')).toString('utf8')).toBe(input);
   });
 
   it('should use a PKCS-style padding byte equal to the padding length', () => {
     // 'test' = 4 bytes → padding = 32 - 4 = 28 bytes, each byte value = 28
     const input = 'test';
     const result = padStringTo256Bits(input);
-    const buf = Buffer.from(result, 'utf8');
-    expect(buf[buf.length - 1]).toBe(28);
+    expect(result[result.length - 1]).toBe(28);
   });
 
   it('should handle an empty string by producing 32 bytes of padding', () => {
     const result = padStringTo256Bits('');
-    const buf = Buffer.from(result, 'utf8');
-    expect(buf.length).toBe(32);
+    expect(result.length).toBe(32);
     // All bytes are the padding value (32)
-    expect(buf[0]).toBe(32);
-    expect(buf[31]).toBe(32);
+    expect(result[0]).toBe(32);
+    expect(result[31]).toBe(32);
   });
 });
 
