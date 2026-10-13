@@ -69,7 +69,7 @@
     },
     "devDependencies": {
         "ejs-lint": "^2.0.0",
-        "jest": "^30.4.2",
+        "jest": "^30.5.2",
         "reconnecting-websocket": "^4.4.0"
     }
 }
