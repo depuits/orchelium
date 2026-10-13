@@ -321,6 +321,7 @@
       case 'start':
         base.label = 'Start';
         base.icon = 'play_arrow';
+        base.data = { terminateOnError: true };
         break;
       case 'execute':
         base.label = 'Execute Script';
