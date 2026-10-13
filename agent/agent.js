@@ -1504,10 +1504,18 @@ process.on('SIGINT', () => {
 });
 
 function padStringTo256Bits(inputString) {
-  const blockSize = 32;
-  const inputLength = Buffer.from(inputString, 'utf8').length;
-  const paddingLength = blockSize - (inputLength % blockSize);
-  return Buffer.concat([Buffer.from(inputString, 'utf8'), Buffer.alloc(paddingLength, paddingLength)]).toString('utf8');
+  const blockSize = 32; // 256 bits / 8 bits per byte = 32 bytes
+  const buf = Buffer.from(inputString, 'utf8');
+
+  // 32 bytes or longer: derive a stable 32-byte key via SHA-256.
+  if (buf.length >= blockSize) {
+    return crypto.createHash('sha256').update(buf).digest();
+  }
+
+  // Shorter than 32 bytes: pad to 32 bytes.
+  const paddingLength = blockSize - buf.length;
+  const padding = Buffer.alloc(paddingLength, paddingLength);
+  return Buffer.concat([buf, padding]);
 }
 
 function getUptime() {
