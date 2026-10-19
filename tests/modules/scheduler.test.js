@@ -547,6 +547,37 @@ describe('Scheduler Module', () => {
     });
 
 
+    it('should skip automatic runs when the job is disabled and still allow a manual run', async () => {
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'test-job',
+          description: 'Test Job',
+          agent: 'test-agent',
+          command: 'test.sh',
+          commandParams: '',
+          scheduleType: 'daily',
+          scheduleTime: '12:00',
+          scheduleMode: 'classic',
+          disabled: true,
+        },
+      ]);
+      await scheduler.init();
+      mockAgents.getAgent.mockReturnValue({
+        name: 'test-agent',
+        status: 'online',
+      });
+      fs.promises.readFile.mockResolvedValue('#!/bin/bash\necho "test"');
+
+      const skipped = await scheduler.runJob('test-job', false);
+      expect(skipped.status).toBe('skipped');
+      expect(skipped.executionId).toBeNull();
+      expect(global.agentComms.sendCommand).not.toHaveBeenCalled();
+
+      const manual = await scheduler.runJob('test-job', 'manual');
+      expect(manual.status).toBe('ok');
+      expect(global.agentComms.sendCommand).toHaveBeenCalled();
+    });
+
     it('should create history item on agent offline error', async () => {
       mockAgents.getAgent.mockReturnValue({
         name: 'test-agent',
@@ -655,6 +686,146 @@ describe('Scheduler Module', () => {
       expect(schedule).toBeDefined();
       expect(schedule.jobName).toBe('threshold-job');
       expect(schedule.scheduleType).toBe('threshold');
+    });
+
+    it('should not register a disabled clock job', async () => {
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'enabled-job',
+          scheduleType: 'daily',
+          scheduleTime: '10:00',
+          agent: 'test-agent',
+          command: 'a.sh',
+        },
+        {
+          jobName: 'disabled-job',
+          scheduleType: 'daily',
+          scheduleTime: '11:00',
+          agent: 'test-agent',
+          command: 'b.sh',
+          disabled: true,
+        },
+      ]);
+
+      global.nodeschedule.scheduleJob.mockClear();
+      await scheduler.init();
+
+      expect(global.nodeschedule.scheduleJob).toHaveBeenCalledTimes(1);
+      expect(global.nodeschedule.scheduleJob).toHaveBeenCalledWith('0 0 10 * * *', expect.any(Function));
+    });
+
+    it('should not poll a disabled rule job', async () => {
+      const setIntervalSpy = jest.spyOn(global, 'setInterval');
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'rule-job',
+          triggerType: 'rule',
+          disabled: true,
+          rulePollIntervalMins: 15,
+          ruleMetric: { agent: 'test-agent', type: 'cpu' },
+          ruleCondition: { operator: '>', threshold: 1 },
+        },
+      ]);
+
+      await scheduler.init();
+
+      const ruleCalls = setIntervalSpy.mock.calls.filter((call) => call[1] === 15 * 60 * 1000);
+      expect(ruleCalls).toHaveLength(0);
+      setIntervalSpy.mockRestore();
+    });
+  });
+
+  describe('setScheduleDisabled()', () => {
+    it('should leave the job in the schedule and stop registering it', async () => {
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'live-job',
+          scheduleType: 'daily',
+          scheduleTime: '08:00',
+          agent: 'test-agent',
+          command: 'a.sh',
+        },
+      ]);
+      await scheduler.init();
+      global.nodeschedule.scheduleJob.mockClear();
+
+      await scheduler.setScheduleDisabled('live-job', true);
+
+      expect(scheduler.getSchedule('live-job')).toBeDefined();
+      expect(scheduler.getSchedule('live-job').disabled).toBe(true);
+      expect(global.nodeschedule.scheduleJob).not.toHaveBeenCalled();
+    });
+
+    it('should register the job again when it is enabled', async () => {
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'paused-job',
+          scheduleType: 'daily',
+          scheduleTime: '09:30',
+          agent: 'test-agent',
+          command: 'a.sh',
+          disabled: true,
+        },
+      ]);
+      await scheduler.init();
+      global.nodeschedule.scheduleJob.mockClear();
+
+      await scheduler.setScheduleDisabled('paused-job', false);
+
+      expect(scheduler.getSchedule('paused-job').disabled).toBe(false);
+      expect(global.nodeschedule.scheduleJob).toHaveBeenCalledWith('0 30 9 * * *', expect.any(Function));
+    });
+
+    it('should keep a disabled job out of the today count', async () => {
+      db.getData.mockResolvedValue([
+        { jobName: 'daily-on', scheduleType: 'daily', scheduleTime: '10:00' },
+        { jobName: 'daily-off', scheduleType: 'daily', scheduleTime: '11:00', disabled: true },
+      ]);
+      await scheduler.init();
+
+      expect(scheduler.getTodaysScheduleCount()).toBe(1);
+    });
+  });
+
+  describe('upsertSchedule() disabled flag', () => {
+    it('should keep the disabled flag when a schedule is saved without a new value', async () => {
+      db.getData.mockResolvedValue([
+        {
+          jobName: 'keep-flag',
+          description: 'd',
+          scheduleType: 'daily',
+          scheduleTime: '12:00',
+          agent: 'test-agent',
+          command: 'test.sh',
+          disabled: true,
+          triggerType: 'clock',
+          scheduleMode: 'classic',
+        },
+      ]);
+      await scheduler.init();
+
+      await scheduler.upsertSchedule(
+        0, 'keep-flag', '#000000', 'd', 'daily', '12:00', '', '',
+        'test-agent', 'test.sh', '', 'schedule', 'classic', null,
+        'clock', null, null, null, null
+      );
+
+      expect(scheduler.getSchedule('keep-flag').disabled).toBe(true);
+    });
+
+    it('should store disabled when the edit form sends it', async () => {
+      db.getData.mockResolvedValue([]);
+      await scheduler.init();
+      global.nodeschedule.scheduleJob.mockClear();
+
+      await scheduler.upsertSchedule(
+        -1, 'form-job', '#000000', 'd', 'daily', '13:00', '', '',
+        'test-agent', 'test.sh', '', 'schedule', 'classic', null,
+        'clock', null, null, null, null, true
+      );
+
+      expect(scheduler.getSchedule('form-job').disabled).toBe(true);
+      expect(global.nodeschedule.scheduleJob).not.toHaveBeenCalled();
     });
   });
 

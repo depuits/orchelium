@@ -1591,6 +1591,13 @@ app.post('/api/webhook/trigger/:jobName', asyncHandler(async (req, res) => {
       logger.warn(`[WEBHOOK] Invalid payload for job [${jobName}]`);
       return res.status(400).json({ error: 'Webhook payload must be a JSON object' });
     }
+
+    const scheduler = require('./scheduler.js');
+    const scheduledJob = scheduler.getSchedule(jobName);
+    if (scheduledJob && (scheduledJob.disabled === true || scheduledJob.disabled === 'true')) {
+      logger.info(`[WEBHOOK] Job [${jobName}] is disabled - trigger ignored`);
+      return res.status(409).json({ success: false, error: 'Job is disabled' });
+    }
     
     logger.info(`[WEBHOOK] Triggering job [${jobName}] from webhook [${validatedWebhook.id}]`);
     
@@ -1615,7 +1622,6 @@ app.post('/api/webhook/trigger/:jobName', asyncHandler(async (req, res) => {
     }
     
     // Trigger the job asynchronously (fire & forget) - don't await it
-    const scheduler = require('./scheduler.js');
     scheduler.runJob(jobName, 'webhook', null, webhookTriggerContext).catch(err => {
       logger.error(`[WEBHOOK] Job [${jobName}] execution failed: ${err.message}`);
     });
@@ -3045,7 +3051,8 @@ app.post('/scheduler.html', validateCsrf, User.isAuthenticated, User.requireAnyP
     triggerType,
     ruleMetricAgent, ruleMetricType, ruleMetricPath, ruleMetricPattern,
     ruleConditionOperator, ruleConditionThreshold,
-    rulePollIntervalMins, ruleCooldownMins
+    rulePollIntervalMins, ruleCooldownMins,
+    disabled
   } = req.body;
     jobName = sanitizeHtml(jobName);
     colour = sanitizeHtml(colour);
@@ -3139,9 +3146,12 @@ app.post('/scheduler.html', validateCsrf, User.isAuthenticated, User.requireAnyP
       }
     }
 
+    const hasDisabledField = Object.prototype.hasOwnProperty.call(req.body, 'disabled');
+    const disabledFlag = hasDisabledField ? (disabled === true || disabled === 'true') : undefined;
+
     scheduler.upsertSchedule(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek,
       dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId,
-      triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins);
+      triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins, disabledFlag);
 
   if(redir===undefined || redir === null || redir.length<=0)redir="/scheduleList.htm";
   res.redirect(redir);
@@ -4472,6 +4482,21 @@ app.get('/rest/schedules/:jobName', User.isAuthenticated, User.requirePermission
   }
   
   res.json(schedule);
+}));
+
+/**
+ * Enable or disable a schedule without removing it.
+ * A disabled job stays on the list and calendar and runs on the next schedule once enabled.
+ */
+app.post('/rest/schedules/:jobName/disabled', validateCsrf, User.isAuthenticated, User.requirePermission(PERMISSIONS.JOBS_EDIT), asyncHandler(async (req, res) => {
+  const { jobName } = req.params;
+  const disabled = req.body && (req.body.disabled === true || req.body.disabled === 'true');
+  const schedule = await scheduler.setScheduleDisabled(jobName, disabled);
+  res.json({
+    success: true,
+    jobName: schedule.jobName,
+    disabled: schedule.disabled === true
+  });
 }));
 
 /**

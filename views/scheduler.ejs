@@ -49,6 +49,12 @@ function noValue(inValue){
   else return "";
 }
 
+function isJobDisabled() {
+  var item = getSchedule();
+  if (!item) return false;
+  return item.disabled === true || item.disabled === 'true';
+}
+
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -285,6 +291,21 @@ function noValue(inValue){
             <textarea id="description" name="description" class="materialize-textarea" required><%=getSchedule().description%></textarea>
             <label for="description">Description*</label>
             <span class="helper-text" data-error="Please provide a description"></span>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col s12">
+              <input type="hidden" name="disabled" id="disabledField" value="<%= isJobDisabled() ? 'true' : 'false' %>">
+              <div class="switch" id="jobEnabledSwitch">
+                <label>
+                  Disabled
+                  <input type="checkbox" id="jobEnabledToggle" <%= isJobDisabled() ? '' : 'checked' %> onchange="document.getElementById('disabledField').value = this.checked ? 'false' : 'true';">
+                  <span class="lever"></span>
+                  Enabled
+                </label>
+              </div>
+              <span class="helper-text">Turn this off to keep the job on the schedule without running it. Turn it on and the job runs at the next scheduled time.</span>
             </div>
           </div>
                     
@@ -851,6 +872,11 @@ function noValue(inValue){
   
   // Submit event handler
   document.getElementById('myForm').addEventListener('submit', function(event) {
+    var enabledToggle = document.getElementById('jobEnabledToggle');
+    var disabledField = document.getElementById('disabledField');
+    if (enabledToggle && disabledField) {
+      disabledField.value = enabledToggle.checked ? 'false' : 'true';
+    }
     console.log('[FORM SUBMIT] Form submission started');
 
     // Validate all input, select, and textarea elements within the form

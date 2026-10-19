@@ -11,6 +11,22 @@ function getFontColor(color){
     return "#FFFFFF";
   }
 }
+function isDisabledSlot(timeSlot) {
+  return !!(timeSlot && (timeSlot.disabled === true || timeSlot.disabled === 'true'));
+}
+
+function slotBackground(timeSlot) {
+  return isDisabledSlot(timeSlot) ? '#e0e0e0' : timeSlot.color;
+}
+
+function slotTextColor(timeSlot) {
+  return isDisabledSlot(timeSlot) ? '#757575' : getFontColor(timeSlot.color);
+}
+
+function slotCardClass(timeSlot) {
+  return isDisabledSlot(timeSlot) ? 'calendar-entry-disabled' : 'white-text';
+}
+
 function isColorLight(color) {
   // Convert the color to RGB format
   color = color.replace("#", "");
@@ -402,12 +418,13 @@ function datesMatch(d1,d2){
                             onclick="showCalendarEntry(<%=timeSlot.index%>,'<%=timeSlot.jobName%>','desc','<%=timeSlot.scheduleType%>',
                             '<%=timeSlot.dayOfWeek%>','<%=timeSlot.dayInMonth%>','<%=timeSlot.scheduleTime%>',
                             '<%=timeSlot.lastUpdated%>','<%=timeSlot.command%>','<%=timeSlot.agent%>','<%=timeSlot.eta%>','<%=timeSlot.color%>','<%=timeSlot.icon%>');">
-                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content white-text"
-                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=timeSlot.color%>">
+                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content <%=slotCardClass(timeSlot)%>"
+                                title="<%= isDisabledSlot(timeSlot) ? 'Disabled' : '' %>"
+                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=slotBackground(timeSlot)%>">
                                 
-                                <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:5px;left:-10px;color:<%=getFontColor(timeSlot.color)%>;font-size:24pt;"><%=timeSlot.icon%></span>
+                                <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:5px;left:-10px;color:<%=slotTextColor(timeSlot)%>;font-size:24pt;"><%=timeSlot.icon%></span>
 
-                                <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=getFontColor(timeSlot.color)%>">
+                                <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=slotTextColor(timeSlot)%>">
                                   <b><%= timeSlot.jobName %></b> - <span style="padding-left:10px"><%=timeSlot.description %></span><br>
                                   <span style="padding-left:5px"><%= timeSlot.scheduleType %> / <%= getDayName(timeSlot.dayOfWeek) %> <%= timeSlot.scheduleTime %></span>
                                   <br><span style="padding-left: 5px;position: absolute;margin-right: 10px;bottom: 5px;text-align: right;width: 100%;padding-right:12px;"><i><%=timeSlot.agent%></i></span>
@@ -468,12 +485,13 @@ function datesMatch(d1,d2){
                             onclick="showCalendarEntry(<%=timeSlot.index%>,'<%=timeSlot.jobName%>','desc','<%=timeSlot.scheduleType%>',
                             '<%=timeSlot.dayOfWeek%>','<%=timeSlot.dayInMonth%>','<%=timeSlot.scheduleTime%>',
                             '<%=timeSlot.lastUpdated%>','<%=timeSlot.command%>','<%=timeSlot.agent%>','<%=timeSlot.eta%>','<%=timeSlot.color%>');">
-                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content white-text"
-                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=timeSlot.color%>;width:160px;max-width:160px;overflow:hidden;">
+                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content <%=slotCardClass(timeSlot)%>"
+                                title="<%= isDisabledSlot(timeSlot) ? 'Disabled' : '' %>"
+                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=slotBackground(timeSlot)%>;width:160px;max-width:160px;overflow:hidden;">
                                 
-                                <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:2px;left:-5px;color:<%=getFontColor(timeSlot.color)%>;font-size:16pt;"><%=timeSlot.icon%></span>  
+                                <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:2px;left:-5px;color:<%=slotTextColor(timeSlot)%>;font-size:16pt;"><%=timeSlot.icon%></span>  
 
-                                <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=getFontColor(timeSlot.color)%>">
+                                <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=slotTextColor(timeSlot)%>">
                                     <b title="<%= timeSlot.jobName %>" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 80%;"><%=timeSlot.jobName %></b><br>
                                     <span style="padding-left:5px"><%= timeSlot.scheduleType %> / <%= getDayName(timeSlot.dayOfWeek) %> <%= timeSlot.scheduleTime %></span>
                                     <br><span style="padding-left: 5px;position: absolute;margin-right: 10px;bottom: 5px;text-align: right;width: 100%;padding-right:5px;"><i><%=timeSlot.agent%></i></span>
@@ -528,12 +546,13 @@ function datesMatch(d1,d2){
                             onclick="showCalendarEntry(<%=timeSlot.index%>,'<%=timeSlot.jobName%>','desc','<%=timeSlot.scheduleType%>',
                             '<%=timeSlot.dayOfWeek%>','<%=timeSlot.dayInMonth%>','<%=timeSlot.scheduleTime%>',
                             '<%=timeSlot.lastUpdated%>','<%=timeSlot.command%>','<%=timeSlot.agent%>','<%=timeSlot.eta%>','<%=timeSlot.color%>');">
-                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content white-text"
-                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=timeSlot.color%>;width:160px;max-width:160px;overflow:hidden;">
+                              <div class="card card_<%=timeSlot.scheduleType%> darken-1 card-content <%=slotCardClass(timeSlot)%>"
+                                title="<%= isDisabledSlot(timeSlot) ? 'Disabled' : '' %>"
+                                style="text-align:left;height:<%=cardheight%>px;background-color:<%=slotBackground(timeSlot)%>;width:160px;max-width:160px;overflow:hidden;">
 
-                                    <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:2px;left:-5px;color:<%=getFontColor(timeSlot.color)%>;font-size:16pt;"><%=timeSlot.icon%></span>  
+                                    <span class="material-icons vertMid" style="display:inline-block;float:right;position:relative;top:2px;left:-5px;color:<%=slotTextColor(timeSlot)%>;font-size:16pt;"><%=timeSlot.icon%></span>  
 
-                                    <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=getFontColor(timeSlot.color)%>">
+                                    <span style="font-size:8pt;padding-left:5px;text-align: left;color:<%=slotTextColor(timeSlot)%>">
                                     <b title="<%= timeSlot.jobName %>" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 80%;"><%= timeSlot.jobName %></b><br>
                                     <span style="padding-left:5px"><%= timeSlot.scheduleType %> / <%= getDayName(timeSlot.dayOfWeek) %> <%= timeSlot.scheduleTime %></span>
                                     <br><span style="padding-left: 5px;position: absolute;margin-right: 10px;bottom: 5px;text-align: right;width: 100%;padding-right:5px;"><i><%=timeSlot.agent%></i></span>
