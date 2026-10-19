@@ -263,6 +263,15 @@ async function deleteScheduleAtIndex(index) {
   }
 }
 
+function isScheduleDisabled(schedule) {
+  if (!schedule) return false;
+  return schedule.disabled === true || schedule.disabled === 'true';
+}
+
+function isManualInvocation(isManual) {
+  return isManual === true || isManual === 'manual';
+}
+
 function getScheduleIndex(jobName){
   for(var i=0;i<schedules.length;i++)
   {
@@ -277,6 +286,7 @@ function getSchedule(jobName){
         if(schedules[i].jobName==jobName)
         {
             var schedule = schedules[i];
+            schedule.disabled = isScheduleDisabled(schedule);
             if (schedule.triggerType === 'clock') {
               schedule.nextRunDate = getNextRunDate(schedules[i]);
             } else if (schedule.triggerType === 'rule') {
@@ -349,15 +359,23 @@ function getScheduleObject(jobName, colour, description, scheduleType, scheduleT
     return schedule;
 }
 
-function upsertSchedule(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins) {
-  return _upsertScheduleAsync(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins);
+function upsertSchedule(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins, disabled) {
+  return _upsertScheduleAsync(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins, disabled);
 }
 
-async function _upsertScheduleAsync(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins) {
+async function _upsertScheduleAsync(index, jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins, disabled) {
   try {
     logger.debug("Upserting Schedule");
 
+    const replacing = !(index === undefined || index === null || index.length <= 0 || index == -1);
+    const existing = replacing ? schedules[index] : null;
+
     var schedule = getScheduleObject(jobName, colour, description, scheduleType, scheduleTime, dayOfWeek, dayInMonth, agentselect, agentcommand, commandparams, icon, scheduleMode, orchestrationId, triggerType, ruleMetric, ruleCondition, rulePollIntervalMins, ruleCooldownMins);
+    if (disabled === undefined || disabled === null || disabled === '') {
+      schedule.disabled = isScheduleDisabled(existing);
+    } else {
+      schedule.disabled = disabled === true || disabled === 'true';
+    }
     logger.info(JSON.stringify(schedule));
     schedule.lastUpdated = new Date().toISOString();
 
@@ -474,6 +492,7 @@ function getSchedules(index){
             if (!schedules[i].triggerType) {
               schedules[i].triggerType = (schedules[i].scheduleType === 'cputhreshold' || schedules[i].scheduleType === 'storagethreshold') ? 'legacy_threshold' : 'clock';
             }
+            schedules[i].disabled = isScheduleDisabled(schedules[i]);
             if (schedules[i].triggerType === 'clock') {
               schedules[i].nextRunDate = displayFormatDate(new Date(getNextRunDate(schedules[i])),true,serverConfig.server.timezone,"YYYY-MM-DDTHH:mm:ss",true);
             } else if (schedules[i].triggerType === 'rule') {
@@ -499,6 +518,7 @@ function getSchedules(index){
           if (!schedules[index].scheduleMode) {
             schedules[index].scheduleMode = 'classic';
           }
+          schedules[index].disabled = isScheduleDisabled(schedules[index]);
           if(schedules[index].scheduleType=="daily"||schedules[index].scheduleType=="weekly"||schedules[index].scheduleType=="monthly"){
             schedules[index].nextRunDate = displayFormatDate(new Date(getNextRunDate(schedules[index])),true); 
           }
@@ -550,6 +570,11 @@ async function runJob(jobName, isManual, inData, triggerContextParam = null, rer
 
     logger.info(`Description: ${schedItem.description}`);
     logger.info(`Mode: ${isManual}`);
+
+    if (isScheduleDisabled(schedItem) && !isManualInvocation(isManual)) {
+      logger.info(`Job [${jobName}] is disabled - skipping automatic run`);
+      return { status: 'skipped', executionId: null };
+    }
 
     // Handle orchestration schedules
     if (schedItem.scheduleMode === 'orchestration') {
@@ -960,6 +985,11 @@ async function scheduleJobs() {
     schedules.forEach((schedItem) => {
       const { jobName, scheduleType, scheduleTime, dayOfWeek, dayInMonth } = schedItem;
 
+      if (isScheduleDisabled(schedItem)) {
+        logger.info(`Job [${jobName}] is disabled - it will not run until enabled`);
+        return;
+      }
+
       // Resolve effective triggerType — default legacy records to 'clock'
       const effectiveTriggerType = schedItem.triggerType || (
         (scheduleType === 'daily' || scheduleType === 'weekly' || scheduleType === 'monthly') ? 'clock' : 'legacy_threshold'
@@ -1043,6 +1073,10 @@ function filterJobsWithDate(jobs,inDate) {
   return jobs.filter(job => {
     const { scheduleType, dayOfWeek, dayInMonth } = job;
 
+    if (isScheduleDisabled(job)) {
+      return false;
+    }
+
     // Daily jobs always run
     if (scheduleType === 'daily') {
       return true;
@@ -1063,6 +1097,26 @@ function filterJobsWithDate(jobs,inDate) {
   });
 }
 
+
+async function setScheduleDisabled(jobName, disabled) {
+  const index = getScheduleIndex(jobName);
+  if (index < 0) {
+    throw new AppError(`Schedule item not found for job: ${jobName}`, 404);
+  }
+
+  schedules[index].disabled = disabled === true || disabled === 'true';
+  schedules[index].lastUpdated = new Date().toISOString();
+  delete schedules[index].nextRunDate;
+
+  if (definitionStore.getBackend() === 'hybrid') {
+    await writeSingleSchedule(schedules[index]);
+  } else {
+    await writeSchedules();
+  }
+
+  logger.info(`Job [${jobName}] ${schedules[index].disabled ? 'disabled' : 'enabled'}`);
+  return schedules[index];
+}
 
 function getTodaysScheduleCount(){
   var filtered = filterJobsForToday(schedules);
@@ -1093,4 +1147,4 @@ function getLast7DaysScheduleCount(){
   return array;
 }
 
-module.exports = { init, getSchedule, getSchedules, getScheduleIndex, upsertSchedule, deleteSchedule,deleteScheduleAtIndex, clearSchedules, migrateSchedulesToFilesystem, manualJobRun, runJob, getNextRunDate, runUpdateJob, getTodaysScheduleCount,getLast7DaysScheduleCount, getInProgressExecution, saveInProgressExecution, removeInProgressExecution, updateInProgressExecution };
+module.exports = { init, getSchedule, getSchedules, getScheduleIndex, upsertSchedule, setScheduleDisabled, deleteSchedule,deleteScheduleAtIndex, clearSchedules, migrateSchedulesToFilesystem, manualJobRun, runJob, getNextRunDate, runUpdateJob, getTodaysScheduleCount,getLast7DaysScheduleCount, getInProgressExecution, saveInProgressExecution, removeInProgressExecution, updateInProgressExecution };

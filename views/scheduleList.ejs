@@ -165,6 +165,56 @@ if (Array.isArray(schedules)) {
     document.location.href = "/runSchedule.html?index=" + scheduleIndex;
   }
 
+  function toggleScheduleEnabled(checkbox) {
+    var jobName = checkbox.getAttribute('data-job-name');
+    var enabled = checkbox.checked;
+    var row = checkbox.closest('tr');
+    checkbox.disabled = true;
+
+    $.ajax({
+      url: '/rest/schedules/' + encodeURIComponent(jobName) + '/disabled',
+      type: 'POST',
+      contentType: 'application/json',
+      headers: {
+        'X-CSRF-Token': '<%= csrf %>'
+      },
+      data: JSON.stringify({ disabled: !enabled }),
+      success: function() {
+        checkbox.disabled = false;
+        checkbox.title = enabled ? 'Disable job' : 'Enable job';
+        if (row) {
+          row.classList.toggle('scheduleDisabled', !enabled);
+          var icon = row.querySelector('.schedule-type-icon');
+          if (icon) {
+            icon.textContent = enabled ? icon.getAttribute('data-job-icon') : 'cancel';
+            icon.title = enabled ? '' : 'Disabled';
+          }
+          var note = row.querySelector('.schedule-disabled-note');
+          var remaining = row.querySelector('.schedule-next-run-remaining');
+          if (note) {
+            note.hidden = enabled;
+            note.style.display = enabled ? 'none' : 'block';
+          }
+          if (remaining) {
+            var showRemaining = enabled && remaining.textContent.trim().length > 0;
+            remaining.hidden = !showRemaining;
+            remaining.style.display = showRemaining ? 'block' : 'none';
+          }
+        }
+        M.toast({
+          html: enabled
+            ? 'Job enabled. It will run on the next schedule.'
+            : 'Job disabled. It stays on the schedule but will not run.'
+        });
+      },
+      error: function() {
+        checkbox.checked = !enabled;
+        checkbox.disabled = false;
+        M.toast({ html: 'Could not update the job' });
+      }
+    });
+  }
+
   function runOrchestrationSchedule(orchestrationId, scheduleIndex) {
     $.ajax({
       url: `/rest/orchestration/jobs/${encodeURIComponent(orchestrationId)}/execute`,
@@ -421,6 +471,12 @@ if (Array.isArray(schedules)) {
               <span id="agent-SortIcon" class="material-icons vertMid scheduleSortIcon"></span>
               </span>
             </th>
+            <th style="min-width:90px">
+              <span class="scheduleHeaderCell">
+                <span class="sortableHeader scheduleHeaderText">Enabled</span>
+                <span class="material-icons vertMid scheduleSortIcon scheduleSortIconPlaceholder">arrow_drop_down</span>
+              </span>
+            </th>
             <th style="min-width:150px">
               <span class="scheduleHeaderCell">
                 <span class="sortableHeader scheduleHeaderText">Actions</span>
@@ -433,15 +489,15 @@ if (Array.isArray(schedules)) {
           <tbody id="scheduleTableBody">
             <% for (let i = 0; i < schedules.length; i++) { %>
               <% var successNum = (!isNaN(schedules[i].successPercentage) ? schedules[i].successPercentage : -1); %>
-              <tr data-name="<%= schedules[i].jobName || '' %>" data-next-run="<%= schedules[i].nextRunDate || '' %>" data-last-updated="<%= schedules[i].lastUpdated || '' %>" data-success="<%= successNum %>" data-agent="<%= schedules[i].agent || '' %>" <% if(schedules[i].returnCode!=0){%>class="errorHighlight"<%}%>>
+              <tr data-name="<%= schedules[i].jobName || '' %>" data-next-run="<%= schedules[i].nextRunDate || '' %>" data-last-updated="<%= schedules[i].lastUpdated || '' %>" data-success="<%= successNum %>" data-agent="<%= schedules[i].agent || '' %>" class="<%= schedules[i].returnCode!=0 ? 'errorHighlight' : '' %><%= schedules[i].disabled ? ' scheduleDisabled' : '' %>">
 
-                <td style="min-width:68px"><span class="material-icons vertMid" style="color:<%=schedules[i].color%>;font-size:24pt;"><%=schedules[i].icon%></span>
-                <% if(schedules[i].scheduleMode==='orchestration'){ %> <span class="material-icons vertMid" style="color:black;font-size:14pt;position: relative; left: -16px;top: 16px;">schema</span> <% } %>
+                <td class="schedule-type-cell" style="min-width:68px"><span class="material-icons vertMid schedule-type-icon" data-job-icon="<%=schedules[i].icon%>" title="<%= schedules[i].disabled ? 'Disabled' : '' %>" style="color:<%=schedules[i].color%>;font-size:24pt;"><%= schedules[i].disabled ? 'cancel' : schedules[i].icon %></span>
+                <% if(schedules[i].scheduleMode==='orchestration'){ %> <span class="material-icons vertMid schedule-orchestration-icon" style="color:black;font-size:14pt;position: relative; left: -16px;top: 16px;">schema</span> <% } %>
               </td>
                 
                 
                 <td>
-                  <strong><%= schedules[i].jobName %></strong>
+                  <strong class="schedule-job-title"><%= schedules[i].jobName %></strong>
                   <br/>
                   <% if (schedules[i].description) { %>
                     <span style="font-size: 0.85em; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 300px;" title="<%=schedules[i].description%>"><%=schedules[i].description%></span>
@@ -502,9 +558,8 @@ if (Array.isArray(schedules)) {
                 %>
                 <td>
                   <span><%= nextRunMain %></span>
-                  <% if (nextRunMeta) { %>
-                    <span style="font-size: 0.85em; color: inherit; display: block;"><%= nextRunMeta %></span>
-                  <% } %>
+                  <span class="schedule-next-run-remaining" <% if (!nextRunMeta || schedules[i].disabled) { %>hidden style="display:none"<% } %>><%= nextRunMeta %></span>
+                  <span class="schedule-disabled-note" <% if (!schedules[i].disabled) { %>hidden<% } %>>Job disabled</span>
                 </td>
                 <td><%= lastUpdatedDisplay %></td>
                 <% var pct = schedules[i].successPercentage;
@@ -514,6 +569,21 @@ if (Array.isArray(schedules)) {
                 <td><%=pct%></td>
                 <!--<td><%= schedules[i].command %> <%= schedules[i].commandParams %></td>-->
                 <td><%= schedules[i].agent %></td>
+                <td>
+                  <div class="switch schedule-enable-switch" title="<%= schedules[i].disabled ? 'Job is disabled. Turn on to run it on the next schedule.' : 'Job is enabled. Turn off to stop scheduled runs.' %>">
+                    <label>
+                      <input type="checkbox"
+                        class="schedule-enabled-toggle"
+                        data-job-name="<%= schedules[i].jobName %>"
+                        title="<%= schedules[i].disabled ? 'Enable job' : 'Disable job' %>"
+                        aria-label="<%= schedules[i].disabled ? 'Enable ' + schedules[i].jobName : 'Disable ' + schedules[i].jobName %>"
+                        <%= schedules[i].disabled ? '' : 'checked' %>
+                        <%= hasPerm('jobs.edit') ? '' : 'disabled' %>
+                        onchange="toggleScheduleEnabled(this)">
+                      <span class="lever"></span>
+                    </label>
+                  </div>
+                </td>
                 <td>
                   <% var btnClass="tableIconButton"; 
                     if(schedules[i].returnCode!=0){btnClass="errorIcons"}
