@@ -184,10 +184,22 @@ if (Array.isArray(schedules)) {
         checkbox.title = enabled ? 'Disable job' : 'Enable job';
         if (row) {
           row.classList.toggle('scheduleDisabled', !enabled);
-          var badge = row.querySelector('.schedule-disabled-badge');
+          var icon = row.querySelector('.schedule-type-icon');
+          if (icon) {
+            icon.textContent = enabled ? icon.getAttribute('data-job-icon') : 'cancel';
+            icon.title = enabled ? '' : 'Disabled';
+          }
           var note = row.querySelector('.schedule-disabled-note');
-          if (badge) badge.hidden = enabled;
-          if (note) note.hidden = enabled;
+          var remaining = row.querySelector('.schedule-next-run-remaining');
+          if (note) {
+            note.hidden = enabled;
+            note.style.display = enabled ? 'none' : 'block';
+          }
+          if (remaining) {
+            var showRemaining = enabled && remaining.textContent.trim().length > 0;
+            remaining.hidden = !showRemaining;
+            remaining.style.display = showRemaining ? 'block' : 'none';
+          }
         }
         M.toast({
           html: enabled
@@ -479,14 +491,13 @@ if (Array.isArray(schedules)) {
               <% var successNum = (!isNaN(schedules[i].successPercentage) ? schedules[i].successPercentage : -1); %>
               <tr data-name="<%= schedules[i].jobName || '' %>" data-next-run="<%= schedules[i].nextRunDate || '' %>" data-last-updated="<%= schedules[i].lastUpdated || '' %>" data-success="<%= successNum %>" data-agent="<%= schedules[i].agent || '' %>" class="<%= schedules[i].returnCode!=0 ? 'errorHighlight' : '' %><%= schedules[i].disabled ? ' scheduleDisabled' : '' %>">
 
-                <td class="schedule-type-cell" style="min-width:68px"><span class="material-icons vertMid schedule-type-icon" style="color:<%=schedules[i].color%>;font-size:24pt;"><%=schedules[i].icon%></span>
+                <td class="schedule-type-cell" style="min-width:68px"><span class="material-icons vertMid schedule-type-icon" data-job-icon="<%=schedules[i].icon%>" title="<%= schedules[i].disabled ? 'Disabled' : '' %>" style="color:<%=schedules[i].color%>;font-size:24pt;"><%= schedules[i].disabled ? 'cancel' : schedules[i].icon %></span>
                 <% if(schedules[i].scheduleMode==='orchestration'){ %> <span class="material-icons vertMid schedule-orchestration-icon" style="color:black;font-size:14pt;position: relative; left: -16px;top: 16px;">schema</span> <% } %>
               </td>
                 
                 
                 <td>
                   <strong class="schedule-job-title"><%= schedules[i].jobName %></strong>
-                  <span class="schedule-disabled-badge" <% if (!schedules[i].disabled) { %>hidden<% } %>>Disabled</span>
                   <br/>
                   <% if (schedules[i].description) { %>
                     <span style="font-size: 0.85em; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 300px;" title="<%=schedules[i].description%>"><%=schedules[i].description%></span>
@@ -547,10 +558,8 @@ if (Array.isArray(schedules)) {
                 %>
                 <td>
                   <span><%= nextRunMain %></span>
-                  <% if (nextRunMeta) { %>
-                    <span style="font-size: 0.85em; color: inherit; display: block;"><%= nextRunMeta %></span>
-                  <% } %>
-                  <span class="schedule-disabled-note" <% if (!schedules[i].disabled) { %>hidden<% } %>>Will not run until enabled</span>
+                  <span class="schedule-next-run-remaining" <% if (!nextRunMeta || schedules[i].disabled) { %>hidden style="display:none"<% } %>><%= nextRunMeta %></span>
+                  <span class="schedule-disabled-note" <% if (!schedules[i].disabled) { %>hidden<% } %>>Job disabled</span>
                 </td>
                 <td><%= lastUpdatedDisplay %></td>
                 <% var pct = schedules[i].successPercentage;
